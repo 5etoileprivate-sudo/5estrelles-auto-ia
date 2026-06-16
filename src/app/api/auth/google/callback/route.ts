@@ -102,6 +102,53 @@ export async function GET(req: NextRequest) {
         }
       }
       
+      // Dynamically fetch account and location from Google Business APIs
+      let googleAccountId = "accounts/acc-room21-prod";
+      let googleLocationId = "locations/loc-room21-prod";
+
+      try {
+        console.log("Fetching real Google Business account ID...");
+        const accountsResponse = await fetch("https://mybusinessbusinessinformation.googleapis.com/v1/accounts", {
+          headers: { "Authorization": `Bearer ${access_token}` }
+        });
+        
+        if (accountsResponse.ok) {
+          const accountsData = await accountsResponse.json();
+          if (accountsData.accounts && accountsData.accounts.length > 0) {
+            googleAccountId = accountsData.accounts[0].name; // Format: accounts/{accountId}
+            console.log(`Resolved Google Account: ${googleAccountId}`);
+            
+            console.log(`Fetching Google Business locations for account ${googleAccountId}...`);
+            const locationsResponse = await fetch(`https://mybusinessbusinessinformation.googleapis.com/v1/${googleAccountId}/locations?readMask=name,title`, {
+              headers: { "Authorization": `Bearer ${access_token}` }
+            });
+            
+            if (locationsResponse.ok) {
+              const locationsData = await locationsResponse.json();
+              if (locationsData.locations && locationsData.locations.length > 0) {
+                const rawLocationName = locationsData.locations[0].name; // e.g. "locations/12345" or "accounts/123/locations/456"
+                if (rawLocationName.includes("locations/")) {
+                  googleLocationId = "locations/" + rawLocationName.split("locations/")[1];
+                } else {
+                  googleLocationId = rawLocationName;
+                }
+                console.log(`Resolved Google Location: ${googleLocationId} (${locationsData.locations[0].title})`);
+              } else {
+                console.warn("No locations found for this Google Business account.");
+              }
+            } else {
+              console.error(`Failed to fetch Google locations. Status: ${locationsResponse.status}`);
+            }
+          } else {
+            console.warn("No Google Business accounts found.");
+          }
+        } else {
+          console.error(`Failed to fetch Google accounts. Status: ${accountsResponse.status}`);
+        }
+      } catch (e) {
+        console.error("Failed to dynamically fetch Google account/location:", e);
+      }
+
       // Update client credentials
       const { error } = await supabaseAdmin
         .from("clients")
@@ -110,8 +157,8 @@ export async function GET(req: NextRequest) {
           // refresh_token is only sent on the first authorization or when prompt=consent is used
           ...(refresh_token ? { google_refresh_token: refresh_token } : {}),
           google_token_expires_at: expiresAt,
-          google_account_id: "accounts/acc-room21-prod", // In production we can fetch this from GCP
-          google_location_id: "locations/loc-room21-prod" // In production we can list locations from GCP
+          google_account_id: googleAccountId,
+          google_location_id: googleLocationId
         })
         .eq("id", targetClientId);
 
