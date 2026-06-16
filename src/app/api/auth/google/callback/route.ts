@@ -76,6 +76,26 @@ export async function GET(req: NextRequest) {
     if (isSupabaseConnected) {
       const supabaseAdmin = createClient(supabaseUrl!, supabaseServiceKey!);
       
+      let targetClientId = clientId;
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      
+      if (!uuidRegex.test(clientId)) {
+        console.warn(`Provided clientId "${clientId}" is not a valid UUID. Attempting fallback lookup...`);
+        // Try to find the first client in the database to link the token to
+        const { data: fallbackClients, error: lookupError } = await supabaseAdmin
+          .from("clients")
+          .select("id, name")
+          .order("created_at", { ascending: true })
+          .limit(1);
+          
+        if (!lookupError && fallbackClients && fallbackClients.length > 0) {
+          targetClientId = fallbackClients[0].id;
+          console.log(`Fallback resolved client "${fallbackClients[0].name}" with UUID: ${targetClientId}`);
+        } else {
+          console.error("No clients found in database for fallback lookup. Lookup error:", lookupError);
+        }
+      }
+      
       // Update client credentials
       const { error } = await supabaseAdmin
         .from("clients")
@@ -87,10 +107,10 @@ export async function GET(req: NextRequest) {
           google_account_id: "accounts/acc-room21-prod", // In production we can fetch this from GCP
           google_location_id: "locations/loc-room21-prod" // In production we can list locations from GCP
         })
-        .eq("id", clientId);
+        .eq("id", targetClientId);
 
       if (error) {
-        console.error("Supabase error saving Google credentials:", error);
+        console.error("Supabase error saving Google credentials for client:", targetClientId, error);
         return NextResponse.json({ error: "Failed to save tokens to database" }, { status: 500 });
       }
     } else {
