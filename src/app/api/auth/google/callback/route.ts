@@ -6,6 +6,12 @@ export async function GET(req: NextRequest) {
   const code = searchParams.get("code");
   const clientId = searchParams.get("state"); // client_id stored in OAuth state
   const isMock = searchParams.get("mock") === "true";
+  const errorParam = searchParams.get("error");
+
+  if (errorParam) {
+    console.error("Google OAuth callback error:", errorParam);
+    return NextResponse.json({ error: `Google OAuth Error: ${errorParam}` }, { status: 400 });
+  }
 
   if (!code || !clientId) {
     return NextResponse.json({ error: "Code and Client state are required" }, { status: 400 });

@@ -9,7 +9,8 @@ export async function GET(req: NextRequest) {
   }
 
   const googleClientId = process.env.GOOGLE_CLIENT_ID;
-  const redirectUri = process.env.GOOGLE_REDIRECT_URI || "http://localhost:3000/api/auth/google/callback";
+  const baseUrl = new URL(req.url).origin;
+  const redirectUri = process.env.GOOGLE_REDIRECT_URI || `${baseUrl}/api/auth/google/callback`;
 
   // Fallback for simulation mode if keys are not set
   if (!googleClientId || googleClientId.includes("your_google_client_id_here")) {
